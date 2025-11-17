@@ -1,0 +1,29 @@
+name: Daily Trading Dashboard
+
+on:
+  schedule:
+    # 06:30 UTC Monday–Friday (adjust as you like)
+    - cron: '30 6 * * 1-5'
+  workflow_dispatch:        # allow manual run from the Actions tab
+
+jobs:
+  build-and-send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily dashboard
+        env:
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+          EMAIL_USER:   ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:   ${{ secrets.EMAIL_PASS }}
+          TO_EMAIL:     ${{ secrets.TO_EMAIL }}
+        run: python daily_dashboard.py
