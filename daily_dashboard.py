@@ -424,12 +424,17 @@ def send_email(subject: str, html_body: str):
     part_html = MIMEText(html_body, "html")
     msg.attach(part_html)
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.send_message(msg)
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.send_message(msg)
+        print(f"Email sent to {TO_EMAIL}")
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"Email authentication failed: {e}. Check EMAIL_USER / EMAIL_PASS secrets.")
+    except Exception as e:
+        print(f"Error sending email: {e}")
 
-    print(f"Email sent to {TO_EMAIL}")
 
 
 # ============== MAIN ==============================================
