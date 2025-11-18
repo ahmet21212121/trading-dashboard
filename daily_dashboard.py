@@ -7,6 +7,18 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from pathlib import Path
+# ------------- Helper to format percentages -------------
+
+
+def format_pct(x):
+    """Format a decimal return like 0.0123 as '1.23%' and handle NaN."""
+    try:
+        if x is None or (isinstance(x, float) and pd.isna(x)):
+            return "N/A"
+        return f"{x * 100:.2f}%"
+    except Exception:
+        return "N/A"
+
 # -------------------------
 # NEWS API SETTINGS + HELPER
 # -------------------------
