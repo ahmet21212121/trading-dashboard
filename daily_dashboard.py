@@ -7,7 +7,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from pathlib import Path
-# ------------- Helper to format percentages -------------
+
+# ----------------- Helper to format percentages -----------------
 
 
 def format_pct(x):
@@ -19,23 +20,27 @@ def format_pct(x):
     except Exception:
         return "N/A"
 
-# -------------------------
-# NEWS API SETTINGS + HELPER
-# -------------------------
 
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
+# ----------------- NEWS API SETTINGS + HELPER -------------------
+
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
 NEWS_ENDPOINT = "https://newsapi.org/v2/everything"
 
 
-def get_news_for_ticker(ticker: str, from_date: datetime.date, to_date: datetime.date, max_articles: int = 2):
+def get_news_for_ticker(
+    ticker: str,
+    from_date: datetime.date,
+    to_date: datetime.date,
+    max_articles: int = 2,
+):
     """
     Fetch a few recent news headlines for a given ticker using NewsAPI.
 
-    Returns list of dictionaries with fields: title, source, url, published_at.
+    Returns list of dicts with keys: title, source, url, published_at.
     Returns [] if key is missing or API error occurs.
     """
     if not NEWS_API_KEY:
-        print("NEWS_API_KEY not set, skipping news fetch.")
+        # Silent skip if no key configured
         return []
 
     query = f"{ticker} stock OR shares OR earnings OR company"
@@ -107,14 +112,10 @@ COMMODITY_TICKERS = {
     "Copper": "HG=F",
 }
 
-# Your watchlist CSV (same as before)
+# Your watchlist CSV
 UNIVERSE_FILE = "sectors_tickers.csv"
 
-# News config – keys come from environment variables (GitHub secrets)
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
-NEWS_ENDPOINT = "https://newsapi.org/v2/everything"
-
-# Email config – again from environment variables
+# Email config – from environment variables / GitHub secrets
 EMAIL_USER = os.environ.get("EMAIL_USER", "")
 EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
 TO_EMAIL = os.environ.get("TO_EMAIL", EMAIL_USER)
@@ -123,6 +124,7 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 
 
 # ============== DATA HELPERS ======================================
+
 
 def get_price_data(tickers, period="60d"):
     data = yf.download(tickers, period=period)["Close"]
@@ -219,7 +221,6 @@ def generate_watchlist_signals(merged_universe: pd.DataFrame):
                 }
             )
 
-    # Turn lists into DataFrames
     long_df = pd.DataFrame(longs)
     short_df = pd.DataFrame(shorts)
 
@@ -276,17 +277,26 @@ def compute_risk_score(macro_df: pd.DataFrame) -> str:
     text = []
 
     if spy > 0.03 and vix < 0 and dxy <= 0:
-        text.append("Overall **risk-on**: equities trending higher, volatility easing, dollar stable/weaker.")
+        text.append(
+            "Overall <b>risk-on</b>: equities trending higher, volatility easing, dollar stable/weaker."
+        )
     elif spy < -0.03 and vix > 0 and dxy >= 0:
-        text.append("Overall **risk-off**: equities weak, volatility rising, dollar firming.")
+        text.append(
+            "Overall <b>risk-off</b>: equities weak, volatility rising, dollar firming."
+        )
     else:
-        text.append("Macro mixed: no clear regime, be selective and focus on stock/sector specifics.")
+        text.append(
+            "Macro mixed: no clear regime, be selective and focus on stock/sector specifics."
+        )
 
-    text.append(f"S&P 500 20D: {format_pct(spy)}, VIX 20D: {format_pct(vix)}, DXY 20D: {format_pct(dxy)}")
+    text.append(
+        f"S&P 500 20D: {format_pct(spy)}, VIX 20D: {format_pct(vix)}, DXY 20D: {format_pct(dxy)}"
+    )
     return " ".join(text)
 
 
 # ============== DASHBOARD BUILDER =================================
+
 
 def build_dashboard_html():
     today = datetime.utcnow().date()
@@ -343,28 +353,38 @@ def build_dashboard_html():
     # --- Signals ---
     long_df, short_df = generate_watchlist_signals(merged_uni)
 
-    # --- News ---
+    # --- News lookup dict ---
     news_lookup = {}
     for t in tickers:
-        news_lookup[t] = get_news_for_ticker(t, from_date=yesterday, to_date=today, max_articles=2)
+        news_lookup[t] = get_news_for_ticker(
+            t, from_date=yesterday, to_date=today, max_articles=2
+        )
 
     # --- Build HTML ---
     html = []
     html.append(f"<h2>Daily Trading Dashboard — {today}</h2>")
 
     # Macro risk score
-    risk_summary = compute_risk_score(macro_returns if not macro_returns.empty else pd.DataFrame())
+    risk_summary = compute_risk_score(
+        macro_returns if not macro_returns.empty else pd.DataFrame()
+    )
     html.append(f"<p>{risk_summary}</p>")
 
     if breadth is not None:
-        html.append(f"<p>Universe breadth (%% of tickers up over 20D): <b>{breadth*100:.1f}%</b></p>")
+        html.append(
+            f"<p>Universe breadth (% of tickers up over 20D): "
+            f"<b>{breadth*100:.1f}%</b></p>"
+        )
 
-    # Macro table
+    # 1. Macro table
     html.append("<h3>1. Macro Overview (Indices / Rates / FX)</h3>")
     if macro_returns.empty:
         html.append("<p><i>Macro data unavailable.</i></p>")
     else:
-        html.append("<table border='1' cellpadding='4'><tr><th>Name</th><th>Ticker</th><th>1D</th><th>5D</th><th>20D</th></tr>")
+        html.append(
+            "<table border='1' cellpadding='4'><tr>"
+            "<th>Name</th><th>Ticker</th><th>1D</th><th>5D</th><th>20D</th></tr>"
+        )
         for _, row in macro_returns.iterrows():
             html.append(
                 f"<tr><td>{row['name']}</td><td>{row['ticker']}</td>"
@@ -374,12 +394,15 @@ def build_dashboard_html():
             )
         html.append("</table>")
 
-    # Commodities
+    # 2. Commodities
     html.append("<h3>2. Commodities Overview</h3>")
     if commodity_returns.empty:
         html.append("<p><i>Commodity data unavailable.</i></p>")
     else:
-        html.append("<table border='1' cellpadding='4'><tr><th>Name</th><th>Ticker</th><th>1D</th><th>5D</th><th>20D</th></tr>")
+        html.append(
+            "<table border='1' cellpadding='4'><tr>"
+            "<th>Name</th><th>Ticker</th><th>1D</th><th>5D</th><th>20D</th></tr>"
+        )
         for _, row in commodity_returns.iterrows():
             html.append(
                 f"<tr><td>{row['name']}</td><td>{row['ticker']}</td>"
@@ -389,12 +412,15 @@ def build_dashboard_html():
             )
         html.append("</table>")
 
-    # Sector ETFs + heat ranking
+    # 3. Sector ETFs + heat ranking
     html.append("<h3>3. Sector ETF Performance</h3>")
     if sector_returns.empty:
         html.append("<p><i>Sector ETF data unavailable.</i></p>")
     else:
-        html.append("<table border='1' cellpadding='4'><tr><th>Sector</th><th>1D</th><th>5D</th><th>20D</th></tr>")
+        html.append(
+            "<table border='1' cellpadding='4'><tr>"
+            "<th>Sector</th><th>1D</th><th>5D</th><th>20D</th></tr>"
+        )
         for sector_name, row in sector_returns.iterrows():
             html.append(
                 f"<tr><td>{sector_name}</td>"
@@ -408,14 +434,23 @@ def build_dashboard_html():
         sector_rank = sector_returns["return_5d"].sort_values(ascending=False)
         top3 = sector_rank.head(3)
         bottom3 = sector_rank.tail(3)
-        html.append("<p><b>Strongest sectors (5D):</b> " +
-                    ", ".join(f"{s} ({format_pct(v)})" for s, v in top3.items()) + "</p>")
-        html.append("<p><b>Weakest sectors (5D):</b> " +
-                    ", ".join(f"{s} ({format_pct(v)})" for s, v in bottom3.items()) + "</p>")
+        html.append(
+            "<p><b>Strongest sectors (5D):</b> "
+            + ", ".join(f"{s} ({format_pct(v)})" for s, v in top3.items())
+            + "</p>"
+        )
+        html.append(
+            "<p><b>Weakest sectors (5D):</b> "
+            + ", ".join(f"{s} ({format_pct(v)})" for s, v in bottom3.items())
+            + "</p>"
+        )
 
-    # Watchlist metrics
+    # 4. Watchlist metrics
     html.append("<h3>4. Watchlist Metrics</h3>")
-    html.append("<table border='1' cellpadding='4'><tr><th>Sector</th><th>Ticker</th><th>1D</th><th>5D</th><th>20D</th></tr>")
+    html.append(
+        "<table border='1' cellpadding='4'><tr>"
+        "<th>Sector</th><th>Ticker</th><th>1D</th><th>5D</th><th>20D</th></tr>"
+    )
     for _, row in merged_uni.sort_values(["sector", "ticker"]).iterrows():
         html.append(
             f"<tr><td>{row['sector']}</td><td>{row['ticker']}</td>"
@@ -425,18 +460,21 @@ def build_dashboard_html():
         )
     html.append("</table>")
 
-    # Signals
+    # 5. Signals
     html.append("<h3>5. Signals & Ideas</h3>")
 
     if long_df.empty:
         html.append("<h4>Long-side ideas</h4><p><i>No strong long signals.</i></p>")
     else:
-        html.append("<h4>Long-side ideas (strong stocks in strong sectors)</h4><ul>")
+        html.append(
+            "<h4>Long-side ideas (strong stocks in strong sectors)</h4><ul>"
+        )
         for _, row in long_df.head(15).iterrows():
+            sector_20d = row["sector_20d"] if "sector_20d" in row.index else None
             html.append(
                 f"<li><b>{row['ticker']}</b> in <b>{row['sector']}</b> – "
                 f"20D: {format_pct(row['return_20d'])}, "
-                f"sector 20D: {format_pct(row['sector_20d'])}, "
+                f"sector 20D: {format_pct(sector_20d)}, "
                 f"5D: {format_pct(row['return_5d'])}.</li>"
             )
         html.append("</ul>")
@@ -444,31 +482,35 @@ def build_dashboard_html():
     if short_df.empty:
         html.append("<h4>Short-side ideas</h4><p><i>No strong short signals.</i></p>")
     else:
-        html.append("<h4>Short-side ideas (weak stocks in weak sectors)</h4><ul>")
+        html.append(
+            "<h4>Short-side ideas (weak stocks in weak sectors)</h4><ul>"
+        )
         for _, row in short_df.head(15).iterrows():
+            sector_20d = row["sector_20d"] if "sector_20d" in row.index else None
             html.append(
                 f"<li><b>{row['ticker']}</b> in <b>{row['sector']}</b> – "
                 f"20D: {format_pct(row['return_20d'])}, "
-                f"sector 20D: {format_pct(row['sector_20d'])}, "
+                f"sector 20D: {format_pct(sector_20d)}, "
                 f"5D: {format_pct(row['return_5d'])}.</li>"
             )
         html.append("</ul>")
 
-    # News
-       # 6. Ticker News (last 24h)
-    html.append("## 6. Ticker News (last 24h)")
+    # 6. Ticker News
+    html.append("<h3>6. Ticker News (last 24h)</h3>")
 
     if not news_lookup:
-    html.append("<p><i>News lookup not available or NEWS_API_KEY not set.</i></p>")
+        html.append(
+            "<p><i>News lookup not available or NEWS_API_KEY not set.</i></p>"
+        )
     else:
-        # Loop over tickers in your universe (you can change this to a watchlist if you want)
-        for t in merged_universe["ticker"].unique():
-            html.append(f"### {t}")
-
+        for t in merged_uni["ticker"].unique():
+            html.append(f"<h4>{t}</h4>")
             headlines = news_lookup.get(t, [])
 
             if not headlines:
-                html.append("<p><i>No major headlines in last 24h or news disabled.</i></p>")
+                html.append(
+                    "<p><i>No major headlines in last 24h or news disabled.</i></p>"
+                )
             else:
                 html.append("<ul>")
                 for h in headlines:
@@ -484,18 +526,18 @@ def build_dashboard_html():
                         label += f" <i>({source})</i>"
 
                     if url:
-                        html.append(f"<li><a href='{url}'>{label}</a></li>")
+                        html.append(
+                            f"<li><a href='{url}'>{label}</a></li>"
+                        )
                     else:
                         html.append(f"<li>{label}</li>")
                 html.append("</ul>")
-
-
-
 
     return "\n".join(html)
 
 
 # ============== EMAIL SENDER ======================================
+
 
 def send_email(subject: str, html_body: str):
     if not EMAIL_USER or not EMAIL_PASS or not TO_EMAIL:
@@ -517,13 +559,16 @@ def send_email(subject: str, html_body: str):
             server.send_message(msg)
         print(f"Email sent to {TO_EMAIL}")
     except smtplib.SMTPAuthenticationError as e:
-        print(f"Email authentication failed: {e}. Check EMAIL_USER / EMAIL_PASS secrets.")
+        print(
+            f"Email authentication failed: {e}. "
+            "Check EMAIL_USER / EMAIL_PASS secrets."
+        )
     except Exception as e:
         print(f"Error sending email: {e}")
 
 
-
 # ============== MAIN ==============================================
+
 
 def main():
     today = datetime.utcnow().date()
