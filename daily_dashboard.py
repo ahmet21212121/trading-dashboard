@@ -96,83 +96,69 @@ def load_universe(path: str) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def get_news_for_ticker(ticker: str, from_date: datetime, to_date: datetime, max_articles: int = 3):
-    if not NEWS_API_KEY:
-        return []
+def generate_watchlist_signals(merged_universe: pd.DataFrame):
+    """
+    Build simple long/short idea lists from the merged_universe table.
 
-    query = f'"{ticker}" AND (stock OR shares OR earnings OR company)'
-    params = {
-        "q": query,
-        "from": from_date.strftime("%Y-%m-%d"),
-        "to": to_date.strftime("%Y-%m-%d"),
-        "sortBy": "relevancy",
-        "language": "en",
-        "pageSize": max_articles,
-        "apiKey": NEWS_API_KEY,
-    }
-    try:
-        resp = requests.get(NEWS_ENDPOINT, params=params, timeout=10)
-        resp.raise_for_status()
-        articles = resp.json().get("articles", [])
-    except Exception as e:
-        print(f"News error for {ticker}: {e}")
-        return []
+    merged_universe is expected to have at least:
+    - sector
+    - ticker
+    - return_1d
+    - return_5d
+    - return_20d
+    """
 
-    headlines = []
-    for a in articles:
-        title = a.get("title", "").strip()
-        source = a.get("source", {}).get("name", "")
-        url = a.get("url", "")
-        if title:
-            headlines.append((title, source, url))
-    return headlines
+    longs = []
+    shorts = []
 
-
-def format_pct(x, decimals=2):
-    try:
-        if x is None or pd.isna(x):
-            return "N/A"
-        return f"{x * 100:.{decimals}f}%"
-    except Exception:
-        return "N/A"
-
-
-# ============== SIGNALS & ANALYTICS ===============================
-
-def generate_watchlist_signals(merged_uni: pd.DataFrame):
-    df = merged_uni.dropna(subset=["return_20d"]).copy()
-    if df.empty:
+    required_cols = {"sector", "ticker", "return_1d", "return_5d", "return_20d"}
+    if not required_cols.issubset(merged_universe.columns):
+        print("generate_watchlist_signals: missing columns, skipping signal generation.")
         return pd.DataFrame(), pd.DataFrame()
 
-    # sector average 20D
-    sector_avg_20d = (
-        df.groupby("sector")["return_20d"]
-        .mean()
-        .rename("sector_20d")
-    )
-    df = df.merge(sector_avg_20d, on="sector")
-
-    longs, shorts = [], []
-
-    for _, row in df.iterrows():
+    for _, row in merged_universe.iterrows():
+        r1 = row["return_1d"]
         r5 = row["return_5d"]
         r20 = row["return_20d"]
-        s20 = row["sector_20d"]
-        if pd.isna(r20) or pd.isna(s20):
+        sector = row["sector"]
+        ticker = row["ticker"]
+
+        # Skip rows with missing data
+        if pd.isna(r1) or pd.isna(r5) or pd.isna(r20):
             continue
 
-        # Long: strong sector + stock outperforming by >4% over 20D + positive 5D
-        if s20 > 0 and r20 > s20 + 0.04 and r5 > 0:
-            longs.append(row)
+        # ---- Simple example rules (we can tweak later) ----
+        # Long idea: strong short-term momentum, not deeply negative on 20d
+        if r1 > 0.01 and r5 > 0.03 and r20 > -0.02:
+            longs.append(
+                {
+                    "sector": sector,
+                    "ticker": ticker,
+                    "return_1d": r1,
+                    "return_5d": r5,
+                    "return_20d": r20,
+                    "signal": "Momentum long",
+                }
+            )
 
-        # Short: weak sector + stock underperforming by >4% over 20D + negative 5D
-        if s20 < 0 and r20 < s20 - 0.04 and r5 < 0:
-            shorts.append(row)
+        # Short idea: consistently weak across horizons
+        if r1 < -0.01 and r5 < -0.03 and r20 < -0.05:
+            shorts.append(
+                {
+                    "sector": sector,
+                    "ticker": ticker,
+                    "return_1d": r1,
+                    "return_5d": r5,
+                    "return_20d": r20,
+                    "signal": "Momentum short",
+                }
+            )
 
-   long_df = pd.DataFrame(longs)
+    # Turn lists into DataFrames
+    long_df = pd.DataFrame(longs)
     short_df = pd.DataFrame(shorts)
 
-    # If nothing matched, that's fine – just keep them empty
+    # Handle empty cases safely
     if long_df.empty:
         print("No long signals generated for today.")
     else:
@@ -186,6 +172,7 @@ def generate_watchlist_signals(merged_uni: pd.DataFrame):
             short_df = short_df.sort_values("return_20d", ascending=True)
 
     return long_df, short_df
+
 
 def compute_breadth(uni_returns: pd.DataFrame):
     if uni_returns.empty:
