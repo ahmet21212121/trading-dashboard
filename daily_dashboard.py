@@ -464,12 +464,26 @@ def build_dashboard_html():
             headlines = news_lookup.get(t, [])
             if not headlines:
                 html.append("<p><i>No major headlines in last 24h.</i></p>")
-            else:
-                html.append("<ul>")
-                for title, source, url in headlines:
-                    html.append(f"<li>{title} <i>({source})</i> "
-                                f"<a href='{url}'>link</a></li>")
-                html.append("</ul>")
+           else:
+    html.append("<ul>")
+    for h in headlines:
+        title = h.get("title")
+        source = h.get("source")
+        url = h.get("url")
+
+        if not title:
+            continue
+
+        label = title
+        if source:
+            label += f" <i>({source})</i>"
+
+        if url:
+            html.append(f"<li><a href='{url}'>{label}</a></li>")
+        else:
+            html.append(f"<li>{label}</li>")
+    html.append("</ul>")
+
 
     return "\n".join(html)
 
