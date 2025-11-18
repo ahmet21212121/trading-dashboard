@@ -455,34 +455,40 @@ def build_dashboard_html():
         html.append("</ul>")
 
     # News
-    html.append("<h3>6. Ticker News (last 24h)</h3>")
-    if not NEWS_API_KEY:
-        html.append("<p><i>News disabled (no NEWS_API_KEY set).</i></p>")
+       # 6. Ticker News (last 24h)
+    html.append("## 6. Ticker News (last 24h)")
+
+    if not news_lookup:
+    html.append("<p><i>News lookup not available or NEWS_API_KEY not set.</i></p>")
     else:
-        for t in tickers:
-            html.append(f"<h4>{t}</h4>")
-                headlines = news_lookup.get(t, [])
-    if not headlines:
-        html.append("<p><i>No major headlines in last 24h or news disabled.</i></p>")
-    else:
-        html.append("<ul>")
-        for h in headlines:
-            title = h.get("title")
-            source = h.get("source")
-            url = h.get("url")
+        # Loop over tickers in your universe (you can change this to a watchlist if you want)
+        for t in merged_universe["ticker"].unique():
+            html.append(f"### {t}")
 
-            if not title:
-                continue
+            headlines = news_lookup.get(t, [])
 
-            label = title
-            if source:
-                label += f" <i>({source})</i>"
-
-            if url:
-                html.append(f"<li><a href='{url}'>{label}</a></li>")
+            if not headlines:
+                html.append("<p><i>No major headlines in last 24h or news disabled.</i></p>")
             else:
-                html.append(f"<li>{label}</li>")
-        html.append("</ul>")
+                html.append("<ul>")
+                for h in headlines:
+                    title = h.get("title")
+                    source = h.get("source")
+                    url = h.get("url")
+
+                    if not title:
+                        continue
+
+                    label = title
+                    if source:
+                        label += f" <i>({source})</i>"
+
+                    if url:
+                        html.append(f"<li><a href='{url}'>{label}</a></li>")
+                    else:
+                        html.append(f"<li>{label}</li>")
+                html.append("</ul>")
+
 
 
 
