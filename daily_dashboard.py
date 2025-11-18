@@ -7,6 +7,59 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from pathlib import Path
+# -------------------------
+# NEWS API SETTINGS + HELPER
+# -------------------------
+
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
+NEWS_ENDPOINT = "https://newsapi.org/v2/everything"
+
+
+def get_news_for_ticker(ticker: str, from_date: datetime.date, to_date: datetime.date, max_articles: int = 2):
+    """
+    Fetch a few recent news headlines for a given ticker using NewsAPI.
+
+    Returns list of dictionaries with fields: title, source, url, published_at.
+    Returns [] if key is missing or API error occurs.
+    """
+    if not NEWS_API_KEY:
+        print("NEWS_API_KEY not set, skipping news fetch.")
+        return []
+
+    query = f"{ticker} stock OR shares OR earnings OR company"
+    params = {
+        "q": query,
+        "from": from_date.isoformat(),
+        "to": to_date.isoformat(),
+        "sortBy": "relevancy",
+        "language": "en",
+        "pageSize": max_articles,
+        "apiKey": NEWS_API_KEY,
+    }
+
+    try:
+        resp = requests.get(NEWS_ENDPOINT, params=params, timeout=10)
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"News error for {ticker}: {e}")
+        return []
+
+    data = resp.json() or {}
+    articles = data.get("articles", [])[:max_articles]
+
+    results = []
+    for a in articles:
+        results.append(
+            {
+                "title": a.get("title"),
+                "source": (a.get("source") or {}).get("name"),
+                "url": a.get("url"),
+                "published_at": a.get("publishedAt"),
+            }
+        )
+
+    return results
+
 
 # ============== CONFIG (tickers, universe file) ===================
 
