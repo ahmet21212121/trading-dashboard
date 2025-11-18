@@ -461,28 +461,29 @@ def build_dashboard_html():
     else:
         for t in tickers:
             html.append(f"<h4>{t}</h4>")
-            headlines = news_lookup.get(t, [])
-            if not headlines:
-                html.append("<p><i>No major headlines in last 24h.</i></p>")
-           else:
-    html.append("<ul>")
-    for h in headlines:
-        title = h.get("title")
-        source = h.get("source")
-        url = h.get("url")
+                headlines = news_lookup.get(t, [])
+    if not headlines:
+        html.append("<p><i>No major headlines in last 24h or news disabled.</i></p>")
+    else:
+        html.append("<ul>")
+        for h in headlines:
+            title = h.get("title")
+            source = h.get("source")
+            url = h.get("url")
 
-        if not title:
-            continue
+            if not title:
+                continue
 
-        label = title
-        if source:
-            label += f" <i>({source})</i>"
+            label = title
+            if source:
+                label += f" <i>({source})</i>"
 
-        if url:
-            html.append(f"<li><a href='{url}'>{label}</a></li>")
-        else:
-            html.append(f"<li>{label}</li>")
-    html.append("</ul>")
+            if url:
+                html.append(f"<li><a href='{url}'>{label}</a></li>")
+            else:
+                html.append(f"<li>{label}</li>")
+        html.append("</ul>")
+
 
 
     return "\n".join(html)
