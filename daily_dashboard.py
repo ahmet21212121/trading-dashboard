@@ -169,10 +169,23 @@ def generate_watchlist_signals(merged_uni: pd.DataFrame):
         if s20 < 0 and r20 < s20 - 0.04 and r5 < 0:
             shorts.append(row)
 
-    long_df = pd.DataFrame(longs).sort_values("return_20d", ascending=False)
-    short_df = pd.DataFrame(shorts).sort_values("return_20d", ascending=True)
-    return long_df, short_df
+   long_df = pd.DataFrame(longs)
+    short_df = pd.DataFrame(shorts)
 
+    # If nothing matched, that's fine – just keep them empty
+    if long_df.empty:
+        print("No long signals generated for today.")
+    else:
+        if "return_20d" in long_df.columns:
+            long_df = long_df.sort_values("return_20d", ascending=False)
+
+    if short_df.empty:
+        print("No short signals generated for today.")
+    else:
+        if "return_20d" in short_df.columns:
+            short_df = short_df.sort_values("return_20d", ascending=True)
+
+    return long_df, short_df
 
 def compute_breadth(uni_returns: pd.DataFrame):
     if uni_returns.empty:
